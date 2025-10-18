@@ -1,0 +1,417 @@
+// Sistem Pesantren Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Enum untuk role dan status
+enum JenisKelamin {
+  LAKI_LAKI
+  PEREMPUAN
+}
+
+enum Role {
+  ADMIN
+  KEPALA_KEPENGASUHAN
+  WALI_KAMAR
+  WALI_SANTRI
+}
+
+enum StatusSantri {
+  AKTIF
+  MUTASI_KELUAR
+  NAIK_KELAS
+  LULUS
+}
+
+enum Semester {
+  GANJIL
+  GENAP
+}
+
+enum MidSemester {
+  TENGAH
+  AKHIR
+}
+
+enum Aspek {
+  IBADAH
+  BELAJAR
+  KARAKTER
+  KEMANDIRIAN
+}
+
+// Tabel Utama
+model Periode {
+  id           String       @id @default(cuid())
+  tahunAjaran  String       // "2025/2026"
+  semester     Semester
+  midSemester  MidSemester
+  isActive     Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  
+  // Relasi
+  pegawaiHistories     WaliKamarHistory[]
+  santriHistories      SantriHistory[]
+  kamarPeriodes        KamarPeriode[]
+  kelasPeriodes        KelasPeriode[]
+  nilai                Nilai[]
+  laporan              Laporan[]
+  komunikasi            Komunikasi[]
+  
+  @@map("periode")
+}
+
+model Pegawai {
+  id          String      @id @default(cuid())
+  nip         String      @unique
+  nama        String
+  email       String      @unique
+  password    String
+  noHp        String?
+  role        Role        // Keep for backward compatibility
+  // Multiple role fields
+  isAdmin     Boolean     @default(false)
+  isKepalaKepengasuhan Boolean @default(false)
+  isWaliKamar Boolean     @default(false)
+  isWaliSantri Boolean    @default(false)
+  isStafTU    Boolean     @default(false)
+  jenisKelamin JenisKelamin?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  waliKamarHistories   WaliKamarHistory[]
+  waliSantriAssignments WaliSantriAssignment[]
+  waliKamarPeriodes    KamarPeriode[] @relation("WaliKamarPeriode")
+  santriWali           Santri[]         @relation("SantriWali")
+  
+  @@map("pegawai")
+}
+
+model Santri {
+  id            String          @id @default(cuid())
+  nis           String          @unique
+  nama          String
+  email         String?         @unique
+  noHp          String?
+  alamat        String?
+  namaOrtu      String?
+  noHpOrtu      String?
+  password      String          @default("santri123")
+  jenisKelamin  JenisKelamin?
+  status        StatusSantri    @default(AKTIF)
+  tahunMasuk    String
+  kamarId       String?
+  waliSantriId  String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  
+  // Relasi
+  santriHistories       SantriHistory[]
+  waliSantriAssignments WaliSantriAssignment[]
+  santriKamar           SantriKamar[]
+  santriKelas           SantriKelas[]
+  nilai                 Nilai[]
+  laporan               Laporan[]
+  komunikasi            Komunikasi[]
+  kamar                 Kamar?           @relation(fields: [kamarId], references: [id])
+  waliSantri            Pegawai?         @relation("SantriWali", fields: [waliSantriId], references: [id])
+  
+  @@map("santri")
+}
+
+model Gedung {
+  id          String      @id @default(cuid())
+  nama        String      @unique
+  deskripsi   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  kamar       Kamar[]
+  kamarPeriodes KamarPeriode[]
+  
+  @@map("gedung")
+}
+
+model Kamar {
+  id          String      @id @default(cuid())
+  gedungId    String
+  nama        String
+  kapasitas   Int
+  deskripsi   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  gedung      Gedung      @relation(fields: [gedungId], references: [id], onDelete: Cascade)
+  santriHistories SantriHistory[]
+  waliKamarHistories WaliKamarHistory[]
+  kamarPeriodes     KamarPeriode[]
+  santri      Santri[]
+  
+  @@unique([gedungId, nama])
+  @@map("kamar")
+}
+
+model Tingkat {
+  id          String      @id @default(cuid())
+  nama        String      @unique // "MA", "SMP", "SD"
+  deskripsi   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  jenjang     Jenjang[]
+  
+  @@map("tingkat")
+}
+
+model Jenjang {
+  id          String      @id @default(cuid())
+  nama        String      // "10", "11", "12", "7", "8", "9"
+  tingkatId   String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  tingkat     Tingkat     @relation(fields: [tingkatId], references: [id], onDelete: Cascade)
+  kelas       Kelas[]
+  
+  @@unique([tingkatId, nama])
+  @@map("jenjang")
+}
+
+model Kelas {
+  id          String      @id @default(cuid())
+  nama        String      // "X-A", "X-B", "XI-Bilingual", "VII-C"
+  jenjangId   String
+  deskripsi   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  jenjang     Jenjang     @relation(fields: [jenjangId], references: [id], onDelete: Cascade)
+  kelasPeriodes   KelasPeriode[]
+  
+  @@unique([jenjangId, nama])
+  @@map("kelas")
+}
+
+model KamarPeriode {
+  id          String      @id @default(cuid())
+  periodeId   String
+  kamarId     String
+  gedungId    String
+  waliKamarId String?
+  createdAt   DateTime    @default(now())
+  
+  // Relasi
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  kamar       Kamar       @relation(fields: [kamarId], references: [id], onDelete: Cascade)
+  gedung      Gedung      @relation(fields: [gedungId], references: [id], onDelete: Cascade)
+  waliKamar   Pegawai?    @relation("WaliKamarPeriode", fields: [waliKamarId], references: [id])
+  santriKamar SantriKamar[]
+  
+  @@unique([periodeId, kamarId])
+  @@map("kamar_periode")
+}
+
+model KelasPeriode {
+  id          String      @id @default(cuid())
+  periodeId   String
+  kelasId     String
+  createdAt   DateTime    @default(now())
+  
+  // Relasi
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  kelas       Kelas       @relation(fields: [kelasId], references: [id], onDelete: Cascade)
+  santriKelas SantriKelas[]
+  
+  @@unique([periodeId, kelasId])
+  @@map("kelas_periode")
+}
+
+model SantriKamar {
+  id            String      @id @default(cuid())
+  santriId      String
+  kamarPeriodeId String
+  createdAt     DateTime    @default(now())
+  
+  // Relasi
+  santri        Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  kamarPeriode  KamarPeriode @relation(fields: [kamarPeriodeId], references: [id], onDelete: Cascade)
+  
+  @@unique([santriId, kamarPeriodeId])
+  @@map("santri_kamar")
+}
+
+model SantriKelas {
+  id            String      @id @default(cuid())
+  santriId      String
+  kelasPeriodeId String
+  createdAt     DateTime    @default(now())
+  
+  // Relasi
+  santri        Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  kelasPeriode  KelasPeriode @relation(fields: [kelasPeriodeId], references: [id], onDelete: Cascade)
+  
+  @@unique([santriId, kelasPeriodeId])
+  @@map("santri_kelas")
+}
+
+model WaliKamarHistory {
+  id          String      @id @default(cuid())
+  pegawaiId   String
+  kamarId     String
+  periodeId   String
+  createdAt   DateTime    @default(now())
+  
+  // Relasi
+  pegawai     Pegawai     @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  kamar       Kamar       @relation(fields: [kamarId], references: [id], onDelete: Cascade)
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  
+  @@unique([pegawaiId, kamarId, periodeId])
+  @@map("wali_kamar_history")
+}
+
+model WaliSantriAssignment {
+  id          String      @id @default(cuid())
+  pegawaiId   String
+  santriId    String
+  createdAt   DateTime    @default(now())
+  
+  // Relasi
+  pegawai     Pegawai     @relation(fields: [pegawaiId], references: [id], onDelete: Cascade)
+  santri      Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  
+  @@unique([pegawaiId, santriId])
+  @@map("wali_santri_assignment")
+}
+
+model SantriHistory {
+  id          String      @id @default(cuid())
+  santriId    String
+  kamarId     String
+  periodeId   String
+  kelas       String
+  createdAt   DateTime    @default(now())
+  
+  // Relasi
+  santri      Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  kamar       Kamar       @relation(fields: [kamarId], references: [id], onDelete: Cascade)
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  
+  @@unique([santriId, periodeId])
+  @@map("santri_history")
+}
+
+enum JenisAspek {
+  AKADEMIK
+  NON_AKADEMIK
+}
+
+model AspekNilai {
+  id          String      @id @default(cuid())
+  nama        String      // Changed from enum to string
+  deskripsi   String?
+  jenis       JenisAspek  @default(NON_AKADEMIK)
+  kategori    Kategori[]
+  kegiatan    Kegiatan[]
+  createdAt   DateTime    @default(now())
+  
+  @@map("aspek_nilai")
+}
+
+model Kategori {
+  id          String      @id @default(cuid())
+  aspekId     String
+  nama        String
+  deskripsi   String?
+  bobot       Float       @default(1.0)
+  createdAt   DateTime    @default(now())
+  
+  // Relasi
+  aspek       AspekNilai  @relation(fields: [aspekId], references: [id], onDelete: Cascade)
+  nilai       Nilai[]
+  
+  @@map("kategori")
+}
+
+model Kegiatan {
+  id          String      @id @default(cuid())
+  aspekId     String
+  nama        String
+  deskripsi   String?
+  frekuensi   String?     // "5 kali/hari", "3 kali/pekan", "1/2 juz/hari", dll
+  target      String?     // target yang diharapkan
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  aspek       AspekNilai  @relation(fields: [aspekId], references: [id], onDelete: Cascade)
+  
+  @@map("kegiatan")
+}
+
+model Nilai {
+  id          String      @id @default(cuid())
+  santriId    String
+  kategoriId  String
+  periodeId   String
+  skor        Int
+  predikat    String      // A, B, C, D
+  deskripsi   String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  santri      Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  kategori    Kategori    @relation(fields: [kategoriId], references: [id], onDelete: Cascade)
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  
+  @@unique([santriId, kategoriId, periodeId])
+  @@map("nilai")
+}
+
+model Laporan {
+  id          String      @id @default(cuid())
+  santriId    String
+  periodeId   String
+  judul       String
+  isi         String
+  kategori    String      // KEHADIRAN, PERILAKU, KESEHATAN, AKADEMIK, LAINNYA
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  santri      Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  
+  @@map("laporan")
+}
+
+model Komunikasi {
+  id          String      @id @default(cuid())
+  santriId    String
+  periodeId   String
+  judul       String
+  isi         String
+  kategori    String      // ORANG_TUA, SANTRI, WALI_KAMAR, LAINNYA
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relasi
+  santri      Santri      @relation(fields: [santriId], references: [id], onDelete: Cascade)
+  periode     Periode     @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  
+  @@map("komunikasi")
+}

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Login Redirect</title>
+</head>
+<body>
+    <h1>Testing Login Redirect</h1>
+    <button onclick="clearAndRedirect()">Clear LocalStorage and Go to Home</button>
+    <button onclick="goToLogin()">Go to Login Directly</button>
+    
+    <script>
+        function clearAndRedirect() {
+            localStorage.clear();
+            window.open('/', '_blank');
+        }
+        
+        function goToLogin() {
+            window.open('/login', '_blank');
+        }
+    </script>
+</body>
+</html>
